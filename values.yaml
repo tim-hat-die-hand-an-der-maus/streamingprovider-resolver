@@ -1,0 +1,24 @@
+namespace: timhatdiehandandermaus
+
+deployment:
+  name: streamingprovider-resolver
+  image: ghcr.io/tim-hat-die-hand-an-der-maus/streamingprovider-resolver:__TAG__
+  imagePullPolicy: Always
+  revisionHistoryLimit: 1
+  replicas: 1
+  labels:
+    app: streamingprovider-resolver
+  ports:
+    - 8000
+  requests:
+    cpu: 100m
+    memory: 100Mi
+  limit:
+    cpu: 300m
+    memory: 300Mi
+
+service:
+  name: streamingprovider-resolver
+  port: 80
+  targetPort: 8000
+  appSelector: streamingprovider-resolver

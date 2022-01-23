@@ -1,5 +1,4 @@
 import dataclasses
-import json
 import os
 import socket
 import urllib.parse

@@ -2,6 +2,7 @@ import dataclasses
 import json
 import os
 import socket
+import urllib.parse
 from typing import List, Optional, Dict
 
 import bs4
@@ -11,7 +12,7 @@ import uvicorn
 from bs4 import Tag
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 LOG_DIRECTORY = "/var/log/werstreamtes" if os.name != "nt" else os.path.join(os.getenv("APPDATA"), "werstreamtes")
@@ -33,6 +34,10 @@ def log(message: str):
 
 class SearchRequest(BaseModel):
     werstreamtesLink: str
+
+
+class TitleSearchRequest(BaseModel):
+    title: str
 
 
 app = FastAPI()
@@ -71,6 +76,53 @@ def get_providers(link: str) -> Optional[List[Provider]]:
         providers.append(Provider(name, options))
 
     return providers
+
+
+@dataclasses.dataclass
+class SearchItem:
+    id: int
+    title: str
+    year: int
+    type: str
+
+    @classmethod
+    def from_json_item(cls, key: str, js: Dict) -> 'SearchItem':
+        _id = int(key[3:])
+        title = js['value']
+        label = js['label']
+        soup = bs4.BeautifulSoup(label, "lxml")
+        span = soup.find("span")
+        type, year = span.text.strip().split(", ")
+        return cls(_id, title, int(year), type)
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "year": self.year,
+            "type": self.type,
+        }
+
+
+def search(title: str) -> Optional[List[Dict]]:
+    title = urllib.parse.quote(title)
+    url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
+
+    req = requests.get(url, headers={"Accept": "application/json"})
+    if req.ok:
+        js = req.json()
+        return [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if key.startswith("id-")]
+
+    return None
+
+
+@app.post("/search")
+def movie_by_title(req: TitleSearchRequest):
+    result = search(req.title)
+    if not result:
+        raise HTTPException(status_code=404, detail="Title not found")
+
+    return result
 
 
 @app.post("/")

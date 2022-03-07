@@ -37,6 +37,7 @@ class SearchRequest(BaseModel):
 
 class TitleSearchRequest(BaseModel):
     title: str
+    year: Optional[int] = None
 
 
 app = FastAPI()
@@ -81,7 +82,7 @@ def get_providers(link: str) -> Optional[List[Provider]]:
 class SearchItem:
     id: int
     title: str
-    year: int
+    year: Optional[int]
     type: str
 
     @classmethod
@@ -91,8 +92,15 @@ class SearchItem:
         label = js['label']
         soup = bs4.BeautifulSoup(label, "lxml")
         span = soup.find("span")
-        type, year = span.text.strip().split(", ")
-        return cls(_id, title, int(year), type)
+        res = span.text.strip().split(", ")
+        if len(res) != 2:
+            _type = res[0]
+            year = None
+        else:
+            _type, year = res
+            year = int(year)
+        _type = _type.split("\n")[-1].strip()
+        return cls(_id, title, year, _type)
 
     def to_json(self):
         return {
@@ -103,21 +111,25 @@ class SearchItem:
         }
 
 
-def search(title: str) -> Optional[List[Dict]]:
+def search(title: str, year: Optional[int]) -> Optional[List[Dict]]:
     title = urllib.parse.quote(title)
     url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 
     req = requests.get(url, headers={"Accept": "application/json"})
     if req.ok:
         js = req.json()
-        return [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if key.startswith("id-")]
+        results = [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if key.startswith("id-")]
+        if year is not None:
+            results = [item for item in results if item["year"] == year]
+
+        return results
 
     return None
 
 
 @app.post("/search")
 def movie_by_title(req: TitleSearchRequest):
-    result = search(req.title)
+    result = search(req.title, req.year)
     if not result:
         raise HTTPException(status_code=404, detail="Title not found")
 
@@ -133,7 +145,12 @@ def movie_by_link(req: SearchRequest):
 
 if __name__ == "__main__":
     if not os.path.exists(LOG_DIRECTORY):
-        os.makedirs(LOG_DIRECTORY)
+        try:
+            os.makedirs(LOG_DIRECTORY)
+        except PermissionError:
+            print(f"No permission to log to {LOG_DIRECTORY}, logging to ./werstreamtes")
+            LOG_DIRECTORY = "./werstreamtes"
+            os.makedirs(LOG_DIRECTORY, exist_ok=True)
 
     log("Starting")
     # noinspection PyTypeChecker

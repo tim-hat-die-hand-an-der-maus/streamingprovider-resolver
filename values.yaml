@@ -3,7 +3,7 @@ namespace: timhatdiehandandermaus
 deployment:
   name: streamingprovider-resolver
   image: ghcr.io/tim-hat-die-hand-an-der-maus/streamingprovider-resolver:__TAG__
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   revisionHistoryLimit: 1
   replicas: 1
   labels:

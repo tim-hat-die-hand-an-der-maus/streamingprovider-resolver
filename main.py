@@ -226,8 +226,7 @@ class WerStreamtEs(Provider, SearchProvider):
 @app.post("/search")
 def movie_by_title(req: TitleSearchRequest):
     results = {}
-    # providers = [WerStreamtEs(), Plex()]
-    providers = [Plex()]
+    providers = [WerStreamtEs(), Plex()]
 
     for provider in providers:
         results[provider.name] = provider.search(req)

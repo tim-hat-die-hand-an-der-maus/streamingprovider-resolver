@@ -1,5 +1,9 @@
 FROM python:3.10-slim
 
+RUN apt-get update && \
+    apt-get install gcc -y && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/app
 
 ENV TZ=Europe/Berlin

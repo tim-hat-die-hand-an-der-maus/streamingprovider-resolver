@@ -212,6 +212,11 @@ class WerStreamtEs(Provider, SearchProvider):
             # value for sky is `Sky Go\nsky` for example
             name = name_element.text.strip().splitlines()[0]
 
+            flatrate = element.find("i", {"class": "fi-check"})
+            if not flatrate:
+                print(f"skip {name} since it's not a flatrate")
+                continue
+
             options = json.loads(element.get("data-options"))
             stream_provider_id = options.get("StreamProviderID")
             providers.append(StreamProvider(stream_provider_id, name))

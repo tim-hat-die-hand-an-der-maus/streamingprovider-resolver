@@ -174,7 +174,7 @@ class Plex(Provider, SearchProvider):
             movies = response.movies
 
             for movie in movies:
-                if fuzz.token_set_ratio(request.title, movie) > 80:
+                if fuzz.token_set_ratio(request.title, movie.title) > 80 or request.title.lower() in movie.title.lower():
                     item = SearchItem(title=movie.title)
                     if request.year:
                         if request.year == movie.year:

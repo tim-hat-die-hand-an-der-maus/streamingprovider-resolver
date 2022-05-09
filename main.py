@@ -59,13 +59,13 @@ def search_vodster_by_title(title_query: str):
 @dataclasses.dataclass
 class SearchItem:
     title: str
-    id: Optional[int] = None
+    id: Optional[str] = None
     year: Optional[int] = None
     type: Optional[str] = None
 
     @classmethod
     def from_json_item(cls, key: str, js: Dict) -> 'SearchItem':
-        _id = int(key[3:])
+        _id = key[3:]
         title = js['value']
         label = js['label']
         soup = bs4.BeautifulSoup(label, "lxml")
@@ -107,6 +107,7 @@ class SearchProvider(ABC):
 @dataclasses.dataclass
 class Provider(ABC):
     name: str
+    use_name_prefix: bool = False
 
     @abstractmethod
     def get_streaming_providers(self, info: str, **kwargs):
@@ -146,6 +147,7 @@ class Plex(Provider, SearchProvider):
     def __init__(self):
         super().__init__("plex")
         self.url = os.getenv("PLEX_RESOLVER_URL") or "http://plex-resolver:8080/movies"
+        self.use_name_prefix = True
 
     def get_movies(self, url: str = None) -> Optional[List[PlexResolverResponseItem]]:
         if not url:
@@ -189,6 +191,10 @@ class WerStreamtEs(Provider, SearchProvider):
     def __init__(self):
         super().__init__("werstreamt.es")
 
+    def get_by_id(self, _id: str) -> Optional[List[StreamProvider]]:
+        url = f"https://www.werstreamt.es/film/details/{_id}"
+        return self.get_streaming_providers(url)
+
     def get_streaming_providers(self, info: str, **kwargs) -> Optional[List[StreamProvider]]:
         try:
             result = requests.get(info)
@@ -212,17 +218,22 @@ class WerStreamtEs(Provider, SearchProvider):
 
         return providers
 
-    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[List[Dict]]:
+    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[List[SearchItem]]:
         title = urllib.parse.quote(request.title)
         url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 
         req = requests.get(url, headers={"Accept": "application/json"})
         if req.ok:
             js = req.json()
-            results = [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if
-                       key.startswith("id-")]
+            search_items: List[SearchItem] = [SearchItem.from_json_item(key, value) for key, value in js.items() if
+                                         key.startswith("id-")]
             if request.year is not None:
-                results = [item for item in results if item["year"] == request.year]
+                search_items = [item for item in search_items if item.year == request.year]
+
+            results = defaultdict(list)
+            for search_item in search_items:
+                for provider in self.get_by_id(search_item.id):
+                    results[provider.name].append(search_item)
 
             return results
 
@@ -231,21 +242,31 @@ class WerStreamtEs(Provider, SearchProvider):
 
 @app.post("/search")
 def movie_by_title(req: TitleSearchRequest):
-    results = {}
+    results = []
     providers = [WerStreamtEs(), Plex()]
 
     for provider in providers:
         if result := provider.search(req):
             if isinstance(result, dict):
                 for name, movies in result.items():
-                    results[f"{provider.name}-{name}"] = movies
+                    if provider.use_name_prefix:
+                        name = f"{provider.name}-{name}"
+
+                    item = {
+                        "name": name,
+                        "movies": movies
+                    }
+                    results.append(item)
             else:
-                results[provider.name] = result
+                results.append({
+                    "name": provider.name,
+                    "movies": result
+                })
 
     if not results:
         raise HTTPException(status_code=404, detail="Title not found")
 
-    return results
+    return {"results": results}
 
 
 @app.post("/")

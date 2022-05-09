@@ -206,8 +206,8 @@ class WerStreamtEs(Provider, SearchProvider):
 
         return providers
 
-    def search(self, title: str, year: Optional[int] = None, **kwargs) -> Optional[List[Dict]]:
-        title = urllib.parse.quote(title)
+    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[List[Dict]]:
+        title = urllib.parse.quote(request.title)
         url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 
         req = requests.get(url, headers={"Accept": "application/json"})
@@ -215,8 +215,8 @@ class WerStreamtEs(Provider, SearchProvider):
             js = req.json()
             results = [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if
                        key.startswith("id-")]
-            if year is not None:
-                results = [item for item in results if item["year"] == year]
+            if request.year is not None:
+                results = [item for item in results if item["year"] == request.year]
 
             return results
 

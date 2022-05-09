@@ -4,6 +4,7 @@ import os
 import socket
 import urllib.parse
 from abc import abstractmethod, ABC
+from collections import defaultdict
 from typing import Dict
 from typing import List, Optional
 
@@ -27,6 +28,7 @@ SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
 
 
 def log(message: str):
+    print(message)
     path = os.path.join(LOG_DIRECTORY, LOG_FILENAME)
     try:
         document = Document(path)
@@ -98,7 +100,7 @@ class SearchProvider(ABC):
     name: str
 
     @abstractmethod
-    def search(self, request: SearchRequest, **kwargs):
+    def search(self, request: SearchRequest, **kwargs) -> Optional[List[SearchItem]]:
         pass
 
 
@@ -160,12 +162,14 @@ class Plex(Provider, SearchProvider):
     def get_streaming_providers(self, info: str, **kwargs):
         pass
 
-    def search(self, request: TitleSearchRequest, **kwargs) -> Dict[str, List[PlexResolverMovie]]:
-        results = {}
+    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[Dict[str, List[PlexResolverMovie]]]:
+        results = defaultdict(list)
+        response = self.get_movies()
+        if not response:
+            return None
 
-        for response in self.get_movies():
+        for response in response:
             movies = response.movies
-            results[response.name] = []
 
             for movie in movies:
                 if fuzz.token_set_ratio(request.title, movie) > 80:
@@ -229,7 +233,12 @@ def movie_by_title(req: TitleSearchRequest):
     providers = [WerStreamtEs(), Plex()]
 
     for provider in providers:
-        results[provider.name] = provider.search(req)
+        if result := provider.search(req):
+            if isinstance(result, dict):
+                for name, movies in result.items():
+                    results[f"{provider.name}-{name}"] = movies
+            else:
+                results[provider.name] = result
 
     if not results:
         raise HTTPException(status_code=404, detail="Title not found")

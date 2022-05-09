@@ -1,18 +1,24 @@
 import dataclasses
+import json
 import os
 import socket
 import urllib.parse
-from typing import List, Optional, Dict
+from abc import abstractmethod, ABC
+from typing import Dict
+from typing import List, Optional
 
 import bs4
 import requests
 import urllib3
 import uvicorn
 from bs4 import Tag
+# noinspection PyPackageRequirements
 from docx import Document
+# noinspection PyPackageRequirements
 from docx.opc.exceptions import PackageNotFoundError
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from thefuzz import fuzz
 
 LOG_DIRECTORY = "/var/log/werstreamtes" if os.name != "nt" else os.path.join(os.getenv("APPDATA"), "werstreamtes")
 LOG_FILENAME = "log.docx"
@@ -49,36 +55,6 @@ def search_vodster_by_title(title_query: str):
 
 
 @dataclasses.dataclass
-class Provider:
-    name: str
-    options: Dict
-
-
-def get_providers(link: str) -> Optional[List[Provider]]:
-    try:
-        result = requests.get(link)
-        body = result.text
-    except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError):
-        log("Failed to retrieve {} due to")
-        return None
-
-    soup = bs4.BeautifulSoup(body, "lxml")
-    provider_elements: List[Tag] = soup.find_all(attrs={"class": "provider"})[1:]
-
-    providers = []
-    for element in provider_elements:
-        name_element = element.find("a", attrs={"class": "left"})
-        # value for sky is `Sky Go\nsky` for example
-        name = name_element.text.strip().splitlines()[0]
-
-        options = element.get("data-options")
-
-        providers.append(Provider(name, options))
-
-    return providers
-
-
-@dataclasses.dataclass
 class SearchItem:
     id: int
     title: str
@@ -111,39 +87,170 @@ class SearchItem:
         }
 
 
-def search(title: str, year: Optional[int]) -> Optional[List[Dict]]:
-    title = urllib.parse.quote(title)
-    url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
+@dataclasses.dataclass
+class StreamProvider:
+    id: Optional[str]
+    name: str
 
-    req = requests.get(url, headers={"Accept": "application/json"})
-    if req.ok:
-        js = req.json()
-        results = [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if key.startswith("id-")]
-        if year is not None:
-            results = [item for item in results if item["year"] == year]
+
+@dataclasses.dataclass
+class SearchProvider(ABC):
+    name: str
+
+    @abstractmethod
+    def search(self, request: SearchRequest, **kwargs):
+        pass
+
+
+@dataclasses.dataclass
+class Provider(ABC):
+    name: str
+
+    @abstractmethod
+    def get_streaming_providers(self, info: str, **kwargs):
+        pass
+
+
+@dataclasses.dataclass
+class PlexResolverMovie:
+    title: str
+    year: int
+
+    @classmethod
+    def from_json(cls, _json: Dict) -> "PlexResolverMovie":
+        return cls(
+            _json["title"],
+            _json["year"]
+        )
+
+
+@dataclasses.dataclass
+class PlexResolverResponseItem:
+    name: str
+    movies: List[PlexResolverMovie]
+    error: Optional[str]  # is this correct?
+
+    @classmethod
+    def from_json(cls, _json: Dict) -> "PlexResolverResponseItem":
+        return cls(
+            _json["name"],
+            [PlexResolverMovie.from_json(movie) for movie in _json.get("movies", [])],
+            _json["error"]
+        )
+
+
+@dataclasses.dataclass
+class Plex(Provider, SearchProvider):
+    def __init__(self):
+        super().__init__("plex")
+        self.url = os.getenv("PLEX_RESOLVER_URL") or "http://plex-resolver:8080/movies"
+
+    def get_movies(self, url: str = None) -> Optional[List[PlexResolverResponseItem]]:
+        if not url:
+            url = self.url
+
+        try:
+            result = requests.get(url)
+        except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError) as e:
+            log(f"Failed to retrieve {url} due to {e}")
+            return None
+
+        return [PlexResolverResponseItem.from_json(j) for j in result.json().get("data", [])]
+
+    def get_streaming_providers(self, info: str, **kwargs):
+        pass
+
+    def search(self, request: TitleSearchRequest, **kwargs) -> Dict[str, List[PlexResolverMovie]]:
+        results = {}
+
+        for response in self.get_movies():
+            movies = response.movies
+            results[response.name] = []
+
+            for movie in movies:
+                if fuzz.token_set_ratio(request.title, movie) > 80:
+                    if request.year:
+                        if request.year == movie.year:
+                            results[response.name].append(movie)
+                    else:
+                        results[response.name].append(movie)
 
         return results
 
-    return None
+
+@dataclasses.dataclass
+class WerStreamtEs(Provider, SearchProvider):
+    def __init__(self):
+        super().__init__("werstreamt.es")
+
+    def get_streaming_providers(self, info: str, **kwargs) -> Optional[List[StreamProvider]]:
+        try:
+            result = requests.get(info)
+            body = result.text
+        except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError):
+            log("Failed to retrieve {} due to")
+            return None
+
+        soup = bs4.BeautifulSoup(body, "lxml")
+        provider_elements: List[Tag] = soup.find_all(attrs={"class": "provider"})[1:]
+
+        providers = []
+        for element in provider_elements:
+            name_element = element.find("a", attrs={"class": "left"})
+            # value for sky is `Sky Go\nsky` for example
+            name = name_element.text.strip().splitlines()[0]
+
+            options = json.loads(element.get("data-options"))
+            stream_provider_id = options.get("StreamProviderID")
+            providers.append(StreamProvider(stream_provider_id, name))
+
+        return providers
+
+    def search(self, title: str, year: Optional[int] = None, **kwargs) -> Optional[List[Dict]]:
+        title = urllib.parse.quote(title)
+        url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
+
+        req = requests.get(url, headers={"Accept": "application/json"})
+        if req.ok:
+            js = req.json()
+            results = [SearchItem.from_json_item(key, value).to_json() for key, value in js.items() if
+                       key.startswith("id-")]
+            if year is not None:
+                results = [item for item in results if item["year"] == year]
+
+            return results
+
+        return None
 
 
 @app.post("/search")
 def movie_by_title(req: TitleSearchRequest):
-    result = search(req.title, req.year)
-    if not result:
+    results = {}
+    # providers = [WerStreamtEs(), Plex()]
+    providers = [Plex()]
+
+    for provider in providers:
+        results[provider.name] = provider.search(req)
+
+    if not results:
         raise HTTPException(status_code=404, detail="Title not found")
 
-    return result
+    return results
 
 
 @app.post("/")
 def movie_by_link(req: SearchRequest):
-    providers = get_providers(req.werstreamtesLink)
+    results = {}
+    providers = [WerStreamtEs()]
 
-    return [provider.name for provider in providers]
+    for provider in providers:
+        results[provider.name] = provider.get_streaming_providers(req.werstreamtesLink)
+
+    return results
 
 
 if __name__ == "__main__":
+    LOG_DIRECTORY = "werstreamtes"
     if not os.path.exists(LOG_DIRECTORY):
         try:
             os.makedirs(LOG_DIRECTORY)

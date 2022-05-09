@@ -223,7 +223,7 @@ class WerStreamtEs(Provider, SearchProvider):
 
         return providers
 
-    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[List[SearchItem]]:
+    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[Dict[str, List[SearchItem]]]:
         title = urllib.parse.quote(request.title)
         url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 

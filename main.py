@@ -51,11 +51,6 @@ class TitleSearchRequest(BaseModel):
 app = FastAPI()
 
 
-def search_vodster_by_title(title_query: str):
-    url = "/".join([BASE_URL, SEARCH_PATH, title_query])
-    return requests.get(url)
-
-
 @dataclasses.dataclass
 class SearchItem:
     title: str

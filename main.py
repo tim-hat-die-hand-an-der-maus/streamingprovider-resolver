@@ -146,7 +146,7 @@ class PlexResolverResponseItem:
 class Plex(Provider, SearchProvider):
     def __init__(self):
         super().__init__("plex")
-        self.url = os.getenv("PLEX_RESOLVER_URL") or "http://plex-resolver:8080/movies"
+        self.url = os.getenv("PLEX_RESOLVER_URL") or "http://plex-resolver:80/movies"
         self.use_name_prefix = True
 
     def get_movies(self, url: str = None) -> Optional[List[PlexResolverResponseItem]]:

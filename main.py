@@ -58,10 +58,10 @@ def search_vodster_by_title(title_query: str):
 
 @dataclasses.dataclass
 class SearchItem:
-    id: int
     title: str
-    year: Optional[int]
-    type: str
+    id: Optional[int] = None
+    year: Optional[int] = None
+    type: Optional[str] = None
 
     @classmethod
     def from_json_item(cls, key: str, js: Dict) -> 'SearchItem':
@@ -78,7 +78,7 @@ class SearchItem:
             _type, year = res
             year = int(year)
         _type = _type.split("\n")[-1].strip()
-        return cls(_id, title, year, _type)
+        return cls(title, _id, year, _type)
 
     def to_json(self):
         return {
@@ -173,11 +173,13 @@ class Plex(Provider, SearchProvider):
 
             for movie in movies:
                 if fuzz.token_set_ratio(request.title, movie) > 80:
+                    item = SearchItem(title=movie.title)
                     if request.year:
                         if request.year == movie.year:
-                            results[response.name].append(movie)
+                            item.year = movie.year
+                            results[response.name].append(item)
                     else:
-                        results[response.name].append(movie)
+                        results[response.name].append(item)
 
         return results
 

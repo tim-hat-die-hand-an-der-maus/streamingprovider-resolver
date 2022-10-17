@@ -7,4 +7,4 @@ lxml==4.9.1
 python-docx==0.8.11
 urllib3==1.26.12
 thefuzz==0.19.0
-python-Levenshtein==0.20.6
+python-Levenshtein==0.20.7

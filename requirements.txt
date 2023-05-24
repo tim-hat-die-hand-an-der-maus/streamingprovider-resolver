@@ -5,6 +5,6 @@ pydantic==1.10.8
 beautifulsoup4==4.12.2
 lxml==4.9.2
 python-docx==0.8.11
-urllib3==1.26.15
+urllib3==1.26.16
 thefuzz==0.19.0
 python-Levenshtein==0.21.0

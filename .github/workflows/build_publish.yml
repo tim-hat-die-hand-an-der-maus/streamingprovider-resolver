@@ -12,9 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: sed -i -e "s#__TAG__#${GITHUB_SHA}#g" values.yaml
-      - uses: WyriHaximus/github-action-helm3@v2
+      - uses: OpenAlcoholics/github-action-helm@v0.1.5
         with:
-          exec: helm lint --strict
+          raw_command: lint
+      - uses: OpenAlcoholics/github-action-helm@v0.1.5
+        with:
+          raw_command: lint --strict
 
   build_push_docker:
     runs-on: ubuntu-latest
@@ -40,7 +43,12 @@ jobs:
       - name: update tag in manifest.yml
         run: sed -i -e "s#__TAG__#${GITHUB_SHA}#g" values.yaml
       - name: install helm chart
-        uses: WyriHaximus/github-action-helm3@v2
+        uses: OpenAlcoholics/github-action-helm@v0.1.5
         with:
-          exec: helm upgrade streamingprovider-resolver . --install --namespace=timhatdiehandandermaus --atomic
+          subcommand: upgrade
+          release_name: streamingprovider-resolver
+          ref: .
+          namespace: timhatdiehandandermaus
+          install: true
+          atomic: true
           kubeconfig: ${{ secrets.KUBECONFIG_RAW }}

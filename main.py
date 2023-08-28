@@ -170,7 +170,8 @@ class Plex(Provider, SearchProvider):
             movies = response.movies
 
             for movie in movies:
-                if fuzz.token_set_ratio(request.title, movie.title) > 80 or request.title.lower() in movie.title.lower():
+                if fuzz.token_set_ratio(request.title,
+                                        movie.title) > 80 or request.title.lower() in movie.title.lower():
                     item = SearchItem(title=movie.title)
                     if request.year:
                         if request.year == movie.year:
@@ -227,7 +228,7 @@ class WerStreamtEs(Provider, SearchProvider):
         if req.ok:
             js = req.json()
             search_items: List[SearchItem] = [SearchItem.from_json_item(key, value) for key, value in js.items() if
-                                         key.startswith("id-")]
+                                              key.startswith("id-")]
             if request.year is not None:
                 search_items = [item for item in search_items if item.year == request.year]
 

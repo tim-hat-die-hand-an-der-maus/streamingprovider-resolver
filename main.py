@@ -232,7 +232,9 @@ class WerStreamtEs(Provider, SearchProvider):
 
             flatrate = element.find("i", {"class": "fi-check"})
             if not flatrate:
-                print(f"skip {name} since it's not a flatrate")
+                create_logger("get_streaming_providers").info(
+                    f"skip {name} since it's not a flatrate"
+                )
                 continue
 
             options = json.loads(element.get("data-options"))

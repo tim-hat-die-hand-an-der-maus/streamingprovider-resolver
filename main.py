@@ -30,14 +30,13 @@ SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
 def log(message: str):
     print(message)
     path = os.path.join(LOG_DIRECTORY, LOG_FILENAME)
-
     try:
         document = Document(path)
     except PackageNotFoundError:
         document = Document()
 
     document.add_paragraph(message)
-    document.save(path, filename=path)
+    document.save(path)
 
 
 class SearchRequest(BaseModel):

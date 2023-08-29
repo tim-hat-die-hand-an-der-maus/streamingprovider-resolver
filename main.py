@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import logging
 import os
 import socket
 import urllib.parse
@@ -13,10 +14,6 @@ import requests
 import urllib3
 import uvicorn
 from bs4 import Tag
-# noinspection PyPackageRequirements
-from docx import Document
-# noinspection PyPackageRequirements
-from docx.opc.exceptions import PackageNotFoundError
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from thefuzz import fuzz
@@ -27,16 +24,19 @@ BASE_URL = os.getenv("BASE_URL") or "https://werstreamt.es"
 SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
 
 
-def log(message: str):
-    print(message)
-    path = os.path.join(LOG_DIRECTORY, LOG_FILENAME)
-    try:
-        document = Document(path)
-    except PackageNotFoundError:
-        document = Document()
+def create_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+    import sys
+    logger = logging.Logger(name)
+    ch = logging.StreamHandler(sys.stdout)
 
-    document.add_paragraph(message)
-    document.save(path)
+    formatting = "[{}] %(asctime)s\t%(levelname)s\t%(module)s.%(funcName)s#%(lineno)d | %(message)s".format(name)
+    formatter = logging.Formatter(formatting)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(ch)
+    logger.setLevel(level)
+
+    return logger
 
 
 class SearchRequest(BaseModel):
@@ -151,7 +151,7 @@ class Plex(Provider, SearchProvider):
         try:
             result = requests.get(url)
         except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError) as e:
-            log(f"Failed to retrieve {url} due to {e}")
+            create_logger("get_movies").error(f"Failed to retrieve {url} due to {e}")
             return None
 
         return [PlexResolverResponseItem.from_json(j) for j in result.json().get("data", [])]
@@ -196,7 +196,7 @@ class WerStreamtEs(Provider, SearchProvider):
             result = requests.get(info)
             body = result.text
         except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError):
-            log("Failed to retrieve {} due to")
+            create_logger("get_streaming_providers").error("Failed to retrieve {} due to")
             return None
 
         soup = bs4.BeautifulSoup(body, "lxml")
@@ -291,6 +291,6 @@ if __name__ == "__main__":
             LOG_DIRECTORY = "./werstreamtes"
             os.makedirs(LOG_DIRECTORY, exist_ok=True)
 
-    log("Starting")
+    create_logger("__main__").info("Starting")
     # noinspection PyTypeChecker
     uvicorn.run(app)

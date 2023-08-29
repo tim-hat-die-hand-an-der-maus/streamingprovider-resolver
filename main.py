@@ -18,7 +18,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from thefuzz import fuzz
 
-LOG_DIRECTORY = "/var/log/werstreamtes" if os.name != "nt" else os.path.join(os.getenv("APPDATA"), "werstreamtes")
+LOG_DIRECTORY = (
+    "/var/log/werstreamtes"
+    if os.name != "nt"
+    else os.path.join(os.getenv("APPDATA"), "werstreamtes")
+)
 LOG_FILENAME = "log.docx"
 BASE_URL = os.getenv("BASE_URL") or "https://werstreamt.es"
 SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
@@ -26,10 +30,13 @@ SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
 
 def create_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     import sys
+
     logger = logging.Logger(name)
     ch = logging.StreamHandler(sys.stdout)
 
-    formatting = "[{}] %(asctime)s\t%(levelname)s\t%(module)s.%(funcName)s#%(lineno)d | %(message)s".format(name)
+    formatting = "[{}] %(asctime)s\t%(levelname)s\t%(module)s.%(funcName)s#%(lineno)d | %(message)s".format(
+        name
+    )
     formatter = logging.Formatter(formatting)
     ch.setFormatter(formatter)
 
@@ -59,10 +66,10 @@ class SearchItem:
     type: Optional[str] = None
 
     @classmethod
-    def from_json_item(cls, key: str, js: Dict) -> 'SearchItem':
+    def from_json_item(cls, key: str, js: Dict) -> "SearchItem":
         _id = key[3:]
-        title = js['value']
-        label = js['label']
+        title = js["value"]
+        label = js["label"]
         soup = bs4.BeautifulSoup(label, "lxml")
         span = soup.find("span")
         res = span.text.strip().split(", ")
@@ -116,10 +123,7 @@ class PlexResolverMovie:
 
     @classmethod
     def from_json(cls, _json: Dict) -> "PlexResolverMovie":
-        return cls(
-            _json["title"],
-            _json["year"]
-        )
+        return cls(_json["title"], _json["year"])
 
 
 @dataclasses.dataclass
@@ -133,7 +137,7 @@ class PlexResolverResponseItem:
         return cls(
             _json["name"],
             [PlexResolverMovie.from_json(movie) for movie in _json.get("movies", [])],
-            _json["error"]
+            _json["error"],
         )
 
 
@@ -150,16 +154,24 @@ class Plex(Provider, SearchProvider):
 
         try:
             result = requests.get(url)
-        except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError) as e:
+        except (
+            requests.exceptions.ConnectionError,
+            socket.gaierror,
+            urllib3.exceptions.MaxRetryError,
+        ) as e:
             create_logger("get_movies").error(f"Failed to retrieve {url} due to {e}")
             return None
 
-        return [PlexResolverResponseItem.from_json(j) for j in result.json().get("data", [])]
+        return [
+            PlexResolverResponseItem.from_json(j) for j in result.json().get("data", [])
+        ]
 
     def get_streaming_providers(self, info: str, **kwargs):
         pass
 
-    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[Dict[str, List[PlexResolverMovie]]]:
+    def search(
+        self, request: TitleSearchRequest, **kwargs
+    ) -> Optional[Dict[str, List[PlexResolverMovie]]]:
         results = defaultdict(list)
         response = self.get_movies()
         if not response:
@@ -169,8 +181,10 @@ class Plex(Provider, SearchProvider):
             movies = response.movies
 
             for movie in movies:
-                if fuzz.token_set_ratio(request.title,
-                                        movie.title) > 80 or request.title.lower() in movie.title.lower():
+                if (
+                    fuzz.token_set_ratio(request.title, movie.title) > 80
+                    or request.title.lower() in movie.title.lower()
+                ):
                     item = SearchItem(title=movie.title)
                     if request.year:
                         if request.year == movie.year:
@@ -191,12 +205,20 @@ class WerStreamtEs(Provider, SearchProvider):
         url = f"https://www.werstreamt.es/film/details/{_id}"
         return self.get_streaming_providers(url)
 
-    def get_streaming_providers(self, info: str, **kwargs) -> Optional[List[StreamProvider]]:
+    def get_streaming_providers(
+        self, info: str, **kwargs
+    ) -> Optional[List[StreamProvider]]:
         try:
             result = requests.get(info)
             body = result.text
-        except (requests.exceptions.ConnectionError, socket.gaierror, urllib3.exceptions.MaxRetryError):
-            create_logger("get_streaming_providers").error("Failed to retrieve {} due to")
+        except (
+            requests.exceptions.ConnectionError,
+            socket.gaierror,
+            urllib3.exceptions.MaxRetryError,
+        ):
+            create_logger("get_streaming_providers").error(
+                "Failed to retrieve {} due to"
+            )
             return None
 
         soup = bs4.BeautifulSoup(body, "lxml")
@@ -219,17 +241,24 @@ class WerStreamtEs(Provider, SearchProvider):
 
         return providers
 
-    def search(self, request: TitleSearchRequest, **kwargs) -> Optional[Dict[str, List[SearchItem]]]:
+    def search(
+        self, request: TitleSearchRequest, **kwargs
+    ) -> Optional[Dict[str, List[SearchItem]]]:
         title = urllib.parse.quote(request.title)
         url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 
         req = requests.get(url, headers={"Accept": "application/json"})
         if req.ok:
             js = req.json()
-            search_items: List[SearchItem] = [SearchItem.from_json_item(key, value) for key, value in js.items() if
-                                              key.startswith("id-")]
+            search_items: List[SearchItem] = [
+                SearchItem.from_json_item(key, value)
+                for key, value in js.items()
+                if key.startswith("id-")
+            ]
             if request.year is not None:
-                search_items = [item for item in search_items if item.year == request.year]
+                search_items = [
+                    item for item in search_items if item.year == request.year
+                ]
 
             results = defaultdict(list)
             for search_item in search_items:
@@ -253,16 +282,10 @@ def movie_by_title(req: TitleSearchRequest):
                     if provider.use_name_prefix:
                         name = f"{provider.name}-{name}"
 
-                    item = {
-                        "name": name,
-                        "movies": movies
-                    }
+                    item = {"name": name, "movies": movies}
                     results.append(item)
             else:
-                results.append({
-                    "name": provider.name,
-                    "movies": result
-                })
+                results.append({"name": provider.name, "movies": result})
 
     if not results:
         raise HTTPException(status_code=404, detail="Title not found")

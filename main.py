@@ -4,10 +4,8 @@ import logging
 import os
 import socket
 import urllib.parse
-from abc import abstractmethod, ABC
 from collections import defaultdict
-from typing import Dict
-from typing import List, Optional
+from typing import Optional
 
 import bs4
 import requests
@@ -15,8 +13,18 @@ import urllib3
 import uvicorn
 from bs4 import Tag
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from thefuzz import fuzz
+
+from streamingprovider.models import (
+    Provider,
+    PlexResolverResponseItem,
+    SearchProvider,
+    TitleSearchRequest,
+    PlexResolverMovie,
+    SearchItem,
+    StreamProvider,
+    SearchRequest,
+)
 
 BASE_URL = os.getenv("BASE_URL") or "https://werstreamt.es"
 SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
@@ -40,99 +48,7 @@ def create_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     return logger
 
 
-class SearchRequest(BaseModel):
-    werstreamtesLink: str
-
-
-class TitleSearchRequest(BaseModel):
-    title: str
-    year: Optional[int] = None
-
-
 app = FastAPI()
-
-
-@dataclasses.dataclass
-class SearchItem:
-    title: str
-    id: Optional[str] = None
-    year: Optional[int] = None
-    type: Optional[str] = None
-
-    @classmethod
-    def from_json_item(cls, key: str, js: Dict) -> "SearchItem":
-        _id = key[3:]
-        title = js["value"]
-        label = js["label"]
-        soup = bs4.BeautifulSoup(label, "lxml")
-        span = soup.find("span")
-        res = span.text.strip().split(", ")
-        if len(res) != 2:
-            _type = res[0]
-            year = None
-        else:
-            _type, year = res
-            year = int(year)
-        _type = _type.split("\n")[-1].strip()
-        return cls(title, _id, year, _type)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "title": self.title,
-            "year": self.year,
-            "type": self.type,
-        }
-
-
-@dataclasses.dataclass
-class StreamProvider:
-    id: Optional[str]
-    name: str
-
-
-@dataclasses.dataclass
-class SearchProvider(ABC):
-    name: str
-
-    @abstractmethod
-    def search(self, request: SearchRequest, **kwargs) -> Optional[List[SearchItem]]:
-        pass
-
-
-@dataclasses.dataclass
-class Provider(ABC):
-    name: str
-    use_name_prefix: bool = False
-
-    @abstractmethod
-    def get_streaming_providers(self, info: str, **kwargs):
-        pass
-
-
-@dataclasses.dataclass
-class PlexResolverMovie:
-    title: str
-    year: int
-
-    @classmethod
-    def from_json(cls, _json: Dict) -> "PlexResolverMovie":
-        return cls(_json["title"], _json["year"])
-
-
-@dataclasses.dataclass
-class PlexResolverResponseItem:
-    name: str
-    movies: List[PlexResolverMovie]
-    error: Optional[str]  # is this correct?
-
-    @classmethod
-    def from_json(cls, _json: Dict) -> "PlexResolverResponseItem":
-        return cls(
-            _json["name"],
-            [PlexResolverMovie.from_json(movie) for movie in _json.get("movies", [])],
-            _json["error"],
-        )
 
 
 @dataclasses.dataclass
@@ -142,7 +58,7 @@ class Plex(Provider, SearchProvider):
         self.url = os.getenv("PLEX_RESOLVER_URL") or "http://plex-resolver:80/movies"
         self.use_name_prefix = True
 
-    def get_movies(self, url: str = None) -> Optional[List[PlexResolverResponseItem]]:
+    def get_movies(self, url: str = None) -> Optional[list[PlexResolverResponseItem]]:
         if not url:
             url = self.url
 
@@ -165,7 +81,7 @@ class Plex(Provider, SearchProvider):
 
     def search(
         self, request: TitleSearchRequest, **kwargs
-    ) -> Optional[Dict[str, List[PlexResolverMovie]]]:
+    ) -> Optional[dict[str, list[PlexResolverMovie]]]:
         results = defaultdict(list)
         response = self.get_movies()
         if not response:
@@ -195,13 +111,13 @@ class WerStreamtEs(Provider, SearchProvider):
     def __init__(self):
         super().__init__("werstreamt.es")
 
-    def get_by_id(self, _id: str) -> Optional[List[StreamProvider]]:
+    def get_by_id(self, _id: str) -> Optional[list[StreamProvider]]:
         url = f"https://www.werstreamt.es/film/details/{_id}"
         return self.get_streaming_providers(url)
 
     def get_streaming_providers(
         self, info: str, **kwargs
-    ) -> Optional[List[StreamProvider]]:
+    ) -> Optional[list[StreamProvider]]:
         try:
             result = requests.get(info)
             body = result.text
@@ -216,7 +132,7 @@ class WerStreamtEs(Provider, SearchProvider):
             return None
 
         soup = bs4.BeautifulSoup(body, "lxml")
-        provider_elements: List[Tag] = soup.find_all(attrs={"class": "provider"})[1:]
+        provider_elements: list[Tag] = soup.find_all(attrs={"class": "provider"})[1:]
 
         providers = []
         for element in provider_elements:
@@ -239,14 +155,14 @@ class WerStreamtEs(Provider, SearchProvider):
 
     def search(
         self, request: TitleSearchRequest, **kwargs
-    ) -> Optional[Dict[str, List[SearchItem]]]:
+    ) -> Optional[dict[str, list[SearchItem]]]:
         title = urllib.parse.quote(request.title)
         url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 
         req = requests.get(url, headers={"Accept": "application/json"})
         if req.ok:
             js = req.json()
-            search_items: List[SearchItem] = [
+            search_items: list[SearchItem] = [
                 SearchItem.from_json_item(key, value)
                 for key, value in js.items()
                 if key.startswith("id-")

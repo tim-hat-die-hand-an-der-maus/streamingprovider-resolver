@@ -18,12 +18,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from thefuzz import fuzz
 
-LOG_DIRECTORY = (
-    "/var/log/werstreamtes"
-    if os.name != "nt"
-    else os.path.join(os.getenv("APPDATA"), "werstreamtes")
-)
-LOG_FILENAME = "log.docx"
 BASE_URL = os.getenv("BASE_URL") or "https://werstreamt.es"
 SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
 
@@ -307,15 +301,6 @@ def movie_by_link(req: SearchRequest):
 
 
 if __name__ == "__main__":
-    LOG_DIRECTORY = "werstreamtes"
-    if not os.path.exists(LOG_DIRECTORY):
-        try:
-            os.makedirs(LOG_DIRECTORY)
-        except PermissionError:
-            print(f"No permission to log to {LOG_DIRECTORY}, logging to ./werstreamtes")
-            LOG_DIRECTORY = "./werstreamtes"
-            os.makedirs(LOG_DIRECTORY, exist_ok=True)
-
     create_logger("__main__").info("Starting")
     # noinspection PyTypeChecker
     uvicorn.run(app)

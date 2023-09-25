@@ -161,7 +161,7 @@ class Plex(Provider, SearchProvider):
         ]
 
     def get_streaming_providers(self, info: str, **kwargs):
-        pass
+        raise NotImplementedError()
 
     def search(
         self, request: TitleSearchRequest, **kwargs

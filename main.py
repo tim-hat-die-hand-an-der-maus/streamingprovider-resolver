@@ -117,7 +117,7 @@ class WerStreamtEs(Provider, SearchProvider):
 
     def get_streaming_providers(
         self, info: str, **kwargs
-    ) -> Optional[list[StreamProvider]]:
+    ) -> Optional[set[StreamProvider]]:
         try:
             result = requests.get(info)
             body = result.text
@@ -134,7 +134,7 @@ class WerStreamtEs(Provider, SearchProvider):
         soup = bs4.BeautifulSoup(body, "lxml")
         provider_elements: list[Tag] = soup.find_all(attrs={"class": "provider"})[1:]
 
-        providers = []
+        providers = set()
         for element in provider_elements:
             name_element = element.find("a", attrs={"class": "left"})
             # value for sky is `Sky Go\nsky` for example
@@ -149,7 +149,7 @@ class WerStreamtEs(Provider, SearchProvider):
 
             options = json.loads(element.get("data-options"))
             stream_provider_id = options.get("StreamProviderID")
-            providers.append(StreamProvider(stream_provider_id, name))
+            providers.add(StreamProvider(stream_provider_id, name))
 
         return providers
 

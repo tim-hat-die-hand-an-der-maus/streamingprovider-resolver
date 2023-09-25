@@ -53,6 +53,12 @@ class StreamProvider:
     id: Optional[str]
     name: str
 
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+    def __hash__(self):
+        return hash(self.name.lower())
+
 
 @dataclasses.dataclass
 class SearchProvider(ABC):

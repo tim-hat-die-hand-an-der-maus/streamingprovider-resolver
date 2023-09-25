@@ -9,6 +9,7 @@ WORKDIR /usr/src/app
 ENV TZ=Europe/Berlin
 
 ADD main.py .
+ADD streamingprovider/ streamingprovider/
 ADD requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt

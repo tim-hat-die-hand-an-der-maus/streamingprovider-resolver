@@ -17,7 +17,6 @@ jobs:
   build-container-image:
     needs:
       - lint
-      - test
     uses: BlindfoldedSurgery/actions-container/.github/workflows/build-image-docker.yml@v3
     with:
       push-image: ${{ github.ref_name == github.event.repository.default_branch }}

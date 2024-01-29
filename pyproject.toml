@@ -21,7 +21,7 @@ python-levenshtein = "^0.23.0"
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
 mypy = "^1.0.0"
-pytest = "^7.4.0"
+pytest = "^8.0.0"
 ruff = "^0.1.7"
 
 [tool.poetry.group.types.dependencies]

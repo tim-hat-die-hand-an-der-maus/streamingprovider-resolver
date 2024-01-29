@@ -2,7 +2,7 @@ namespace: timhatdiehandandermaus
 
 deployment:
   name: streamingprovider-resolver
-  image: ${IMAGE_NAME}
+  image: "${IMAGE_NAME}:${GITHUB_SHA}"
   imagePullPolicy: IfNotPresent
   revisionHistoryLimit: 1
   replicas: 1

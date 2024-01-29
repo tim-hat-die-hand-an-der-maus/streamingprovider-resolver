@@ -1,5 +1,20 @@
 {
   "extends": [
-    "config:base"
+    "github>tim-hat-die-hand-an-der-maus/renovate-config"
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchManagers": [
+        "poetry"
+      ],
+      "matchDepPatterns": [
+        "types-.*"
+      ],
+      "automerge": true
+    }
   ]
 }

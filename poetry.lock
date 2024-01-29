@@ -864,13 +864,13 @@ full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart", "pyyam
 
 [[package]]
 name = "thefuzz"
-version = "0.20.0"
+version = "0.22.1"
 description = "Fuzzy string matching in python"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "thefuzz-0.20.0-py3-none-any.whl", hash = "sha256:bd2b657a12bd8518917d2d71c53125368706233b822fac688fca956730154388"},
-    {file = "thefuzz-0.20.0.tar.gz", hash = "sha256:a25e49786b1c4603c7fc6e2d69e6bc660982a2919698b536ff8354e0631cc40d"},
+    {file = "thefuzz-0.22.1-py3-none-any.whl", hash = "sha256:59729b33556850b90e1093c4cf9e618af6f2e4c985df193fdf3c5b5cf02ca481"},
+    {file = "thefuzz-0.22.1.tar.gz", hash = "sha256:7138039a7ecf540da323792d8592ef9902b1d79eb78c147d4f20664de79f3680"},
 ]
 
 [package.dependencies]
@@ -955,4 +955,4 @@ standard = ["colorama (>=0.4)", "httptools (>=0.5.0)", "python-dotenv (>=0.13)",
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "d5d08df9cf10aa1829fea2427581d21c51ffe9e89918f17f6df50c648841da07"
+content-hash = "09e0bf4a2b1d305e7fecee21daabe1d514e58dabdc65ffc63014ded8970326f7"

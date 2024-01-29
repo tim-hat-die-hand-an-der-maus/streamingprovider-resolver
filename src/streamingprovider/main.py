@@ -1,4 +1,5 @@
 import dataclasses
+import inspect
 import json
 import logging
 import os
@@ -15,7 +16,7 @@ from bs4 import Tag
 from fastapi import FastAPI, HTTPException
 from thefuzz import fuzz
 
-from streamingprovider.models import (
+from models import (
     Provider,
     PlexResolverResponseItem,
     SearchProvider,
@@ -30,7 +31,7 @@ BASE_URL = os.getenv("BASE_URL") or "https://werstreamt.es"
 SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
 
 
-def create_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+def create_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
     import sys
 
     logger = logging.Logger(name)
@@ -184,6 +185,7 @@ class WerStreamtEs(Provider, SearchProvider):
 
 @app.post("/search")
 def movie_by_title(req: TitleSearchRequest):
+    create_logger(inspect.currentframe().f_code.co_name).debug(f"process {req}")
     results = []
     providers = [WerStreamtEs()]
 
@@ -207,6 +209,8 @@ def movie_by_title(req: TitleSearchRequest):
 
 @app.post("/")
 def movie_by_link(req: SearchRequest):
+    create_logger(inspect.currentframe().f_code.co_name).debug(f"process {req}")
+
     results = {}
     providers = [WerStreamtEs()]
 
@@ -219,4 +223,4 @@ def movie_by_link(req: SearchRequest):
 if __name__ == "__main__":
     create_logger("__main__").info("Starting")
     # noinspection PyTypeChecker
-    uvicorn.run(app)
+    uvicorn.run(app, host="0.0.0.0")

@@ -1,17 +1,14 @@
-FROM python:3.11-slim
-
-RUN apt-get update && \
-    apt-get install gcc -y && \
-    rm -rf /var/lib/apt/lists/*
+FROM ghcr.io/blindfoldedsurgery/poetry:1.1.1-pipx-3.12-bookworm
 
 WORKDIR /usr/src/app
 
-ENV TZ=Europe/Berlin
+ADD poetry.toml .
+ADD poetry.lock .
+ADD pyproject.toml .
+ADD README.md .
 
-ADD main.py .
-ADD streamingprovider/ streamingprovider/
-ADD requirements.txt .
+ADD src/streamingprovider/ src/streamingprovider/
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN poetry install --no-interaction --ansi --without dev
 
-CMD uvicorn main:app --host 0.0.0.0
+CMD poetry run python src/streamingprovider/main.py

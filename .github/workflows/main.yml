@@ -39,10 +39,10 @@ jobs:
         uses: BlindfoldedSurgery/github-action-helm@v0.3.0
         with:
           subcommand: upgrade
-          release_name: polarlight-notifier
+          release_name: streamingprovider-resolver
           ref: .
           install: true
-          namespace: wooglife
+          namespace: timhatdiehandandermaus
           atomic: true
           kubeconfig: ${{ secrets.KUBECONFIG_RAW }}
 

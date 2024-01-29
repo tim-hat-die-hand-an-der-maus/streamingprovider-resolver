@@ -3,14 +3,12 @@ import inspect
 import json
 import logging
 import os
-import socket
 import urllib.parse
 from collections import defaultdict
 from typing import Optional
 
 import bs4
-import requests
-import urllib3
+import httpx
 import uvicorn
 from bs4 import Tag
 from fastapi import FastAPI, HTTPException
@@ -65,12 +63,8 @@ class Plex(Provider, SearchProvider):
         url = _url if _url is not None else self.url
 
         try:
-            result = requests.get(url)
-        except (
-            requests.exceptions.ConnectionError,
-            socket.gaierror,
-            urllib3.exceptions.MaxRetryError,
-        ) as e:
+            result = httpx.get(url, follow_redirects=True, timeout=15)
+        except (httpx.HTTPStatusError, httpx.HTTPError) as e:
             create_logger("get_movies").error(f"Failed to retrieve {url} due to {e}")
             return None
 
@@ -121,13 +115,9 @@ class WerStreamtEs(Provider, SearchProvider):
         self, info: str, **kwargs
     ) -> list[StreamProvider] | None:
         try:
-            result = requests.get(info)
+            result = httpx.get(info, follow_redirects=True, timeout=15)
             body = result.text
-        except (
-            requests.exceptions.ConnectionError,
-            socket.gaierror,
-            urllib3.exceptions.MaxRetryError,
-        ):
+        except (httpx.HTTPError, httpx.HTTPStatusError):
             create_logger("get_streaming_providers").error(
                 "Failed to retrieve {} due to"
             )
@@ -172,8 +162,18 @@ class WerStreamtEs(Provider, SearchProvider):
         title = urllib.parse.quote(request.title)
         url = "https://www.werstreamt.es/suche/suggestTitle?term=" + title
 
-        req = requests.get(url, headers={"Accept": "application/json"})
-        if req.ok:
+        try:
+            req = httpx.get(
+                url,
+                follow_redirects=True,
+                timeout=15,
+                headers={"Accept": "application/json"},
+            )
+            req.raise_for_status()
+        except (httpx.HTTPError, httpx.HTTPStatusError):
+            return None
+
+        if req:
             js = req.json()
             search_items: list[SearchItem] = []
             for key, value in js.items():

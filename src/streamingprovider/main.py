@@ -14,9 +14,7 @@ import urllib3
 import uvicorn
 from bs4 import Tag
 from fastapi import FastAPI, HTTPException
-from thefuzz import fuzz
-
-from models import (
+from streamingprovider.models import (
     Provider,
     PlexResolverResponseItem,
     SearchProvider,
@@ -25,7 +23,9 @@ from models import (
     SearchItem,
     StreamProvider,
     SearchRequest,
+    IncompleteSearchItem,
 )
+from thefuzz import fuzz
 
 BASE_URL = os.getenv("BASE_URL") or "https://werstreamt.es"
 SEARCH_PATH = os.getenv("SEARCH_PATH") or "/suggestTitle?term="
@@ -59,9 +59,10 @@ class Plex(Provider, SearchProvider):
         self.url = os.getenv("PLEX_RESOLVER_URL") or "http://plex-resolver/movies"
         self.use_name_prefix = True
 
-    def get_movies(self, url: str = None) -> Optional[list[PlexResolverResponseItem]]:
-        if not url:
-            url = self.url
+    def get_movies(
+        self, _url: str | None = None
+    ) -> Optional[list[PlexResolverResponseItem]]:
+        url = _url if _url is not None else self.url
 
         try:
             result = requests.get(url)
@@ -80,16 +81,16 @@ class Plex(Provider, SearchProvider):
     def get_streaming_providers(self, info: str, **kwargs):
         raise NotImplementedError()
 
-    def search(
+    def search(  # type: ignore
         self, request: TitleSearchRequest, **kwargs
     ) -> Optional[dict[str, list[PlexResolverMovie]]]:
-        results = defaultdict(list)
+        results: defaultdict = defaultdict(list)
         response = self.get_movies()
         if not response:
             return None
 
-        for response in response:
-            movies = response.movies
+        for movie_response in response:
+            movies = movie_response.movies
 
             for movie in movies:
                 if (
@@ -100,9 +101,9 @@ class Plex(Provider, SearchProvider):
                     if request.year:
                         if request.year == movie.year:
                             item.year = movie.year
-                            results[response.name].append(item)
+                            results[movie_response.name].append(item)
                     else:
-                        results[response.name].append(item)
+                        results[movie_response.name].append(item)
 
         return results
 
@@ -118,7 +119,7 @@ class WerStreamtEs(Provider, SearchProvider):
 
     def get_streaming_providers(
         self, info: str, **kwargs
-    ) -> Optional[set[StreamProvider]]:
+    ) -> list[StreamProvider] | None:
         try:
             result = requests.get(info)
             body = result.text
@@ -135,9 +136,12 @@ class WerStreamtEs(Provider, SearchProvider):
         soup = bs4.BeautifulSoup(body, "lxml")
         provider_elements: list[Tag] = soup.find_all(attrs={"class": "provider"})[1:]
 
-        providers = set()
+        providers: set[StreamProvider] = set()
         for element in provider_elements:
             name_element = element.find("a", attrs={"class": "left"})
+            if not name_element:
+                continue
+
             # value for sky is `Sky Go\nsky` for example
             name = name_element.text.strip().splitlines()[0]
 
@@ -148,13 +152,21 @@ class WerStreamtEs(Provider, SearchProvider):
                 )
                 continue
 
-            options = json.loads(element.get("data-options"))
+            _data_options = element.get("data-options")
+            data_options: str
+            if _data_options is None:
+                data_options = "{}"
+            elif isinstance(_data_options, list):
+                data_options = "\n".join(_data_options)
+            else:
+                data_options = _data_options
+            options = json.loads(data_options)
             stream_provider_id = options.get("StreamProviderID")
             providers.add(StreamProvider(stream_provider_id, name))
 
-        return providers
+        return list(providers)
 
-    def search(
+    def search(  # type: ignore
         self, request: TitleSearchRequest, **kwargs
     ) -> Optional[dict[str, list[SearchItem]]]:
         title = urllib.parse.quote(request.title)
@@ -163,11 +175,14 @@ class WerStreamtEs(Provider, SearchProvider):
         req = requests.get(url, headers={"Accept": "application/json"})
         if req.ok:
             js = req.json()
-            search_items: list[SearchItem] = [
-                SearchItem.from_json_item(key, value)
-                for key, value in js.items()
-                if key.startswith("id-")
-            ]
+            search_items: list[SearchItem] = []
+            for key, value in js.items():
+                if key.startswith("id-"):
+                    try:
+                        search_items.append(SearchItem.from_json_item(key, value))
+                    except IncompleteSearchItem:
+                        continue
+
             if request.year is not None:
                 search_items = [
                     item for item in search_items if item.year == request.year
@@ -175,7 +190,13 @@ class WerStreamtEs(Provider, SearchProvider):
 
             results = defaultdict(list)
             for search_item in search_items:
-                for provider in self.get_by_id(search_item.id):
+                if not search_item.id:
+                    continue
+
+                providers = self.get_by_id(search_item.id)
+                if providers is None:
+                    continue
+                for provider in providers:
                     results[provider.name].append(search_item)
 
             return results
@@ -185,7 +206,9 @@ class WerStreamtEs(Provider, SearchProvider):
 
 @app.post("/search")
 def movie_by_title(req: TitleSearchRequest):
-    create_logger(inspect.currentframe().f_code.co_name).debug(f"process {req}")
+    create_logger(inspect.currentframe().f_code.co_name).debug(  # type: ignore
+        f"process {req}"
+    )
     results = []
     providers = [WerStreamtEs()]
 
@@ -209,7 +232,7 @@ def movie_by_title(req: TitleSearchRequest):
 
 @app.post("/")
 def movie_by_link(req: SearchRequest):
-    create_logger(inspect.currentframe().f_code.co_name).debug(f"process {req}")
+    create_logger(inspect.currentframe().f_code.co_name).debug(f"process {req}")  # type: ignore
 
     results = {}
     providers = [WerStreamtEs()]

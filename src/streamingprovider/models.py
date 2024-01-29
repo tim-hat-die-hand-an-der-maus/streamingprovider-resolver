@@ -6,6 +6,10 @@ import bs4
 from pydantic import BaseModel
 
 
+class IncompleteSearchItem(Exception):
+    pass
+
+
 @dataclasses.dataclass
 class SearchItem:
     title: str
@@ -20,13 +24,17 @@ class SearchItem:
         label = js["label"]
         soup = bs4.BeautifulSoup(label, "lxml")
         span = soup.find("span")
+        if not span:
+            raise IncompleteSearchItem
+
         res = span.text.strip().split(", ")
+        year: int | None
         if len(res) != 2:
             _type = res[0]
             year = None
         else:
-            _type, year = res
-            year = int(year)
+            _type, _year = res
+            year = int(_year)
         _type = _type.split("\n")[-1].strip()
         return cls(title, _id, year, _type)
 
@@ -65,7 +73,7 @@ class SearchProvider(ABC):
     name: str
 
     @abstractmethod
-    def search(self, request: SearchRequest, **kwargs) -> Optional[list[SearchItem]]:
+    def search(self, request, **kwargs) -> Optional[list[SearchItem]]:
         pass
 
 
